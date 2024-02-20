@@ -4,14 +4,30 @@ def config_parser(cmd=None):
     parser = configargparse.ArgumentParser()
     parser.add_argument('--config', is_config_file=True,
                         help='config file path')
+
     # General information
     parser.add_argument("--project_directory", type=str,
-                        help='experiment name')
+                        help='path of current project',
+                        default='')
+    parser.add_argument("--local_rank", type=int,
+                        help='gpu id to use',
+                        default=0) 
     
     # Incoming Dataset Information
     parser.add_argument("--input_dataset", type=str,
-                        help='experiment name')
+                        help='path to folder containing data')
     
     # Output Dataset Information
     parser.add_argument("--feature_dataset", type=str,
                         help='experiment name') 
+    parser.add_argument("--path_to_hdd", type=str,
+                        help='path to bigger storage') 
+    
+    # Machine Learning Parameters
+    parser.add_argument("--batch_size", type=int,
+                        help='Size of batches used for inference') 
+
+    if cmd is not None:
+        return parser.parse_args(cmd)
+    else:
+        return parser.parse_args()

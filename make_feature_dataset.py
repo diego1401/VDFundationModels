@@ -1,46 +1,13 @@
-###
-# TODO: - Make a dataset of 100 “images” of the features of a scene.
-#       - Make function to visualize result → PCA to 3D and then draw.
-###
-
-
+from cgi import test
+from dataLoader.dino_utils import FeatureExtractor
 import torch,os, cv2
+from tqdm import tqdm
 from opt import config_parser
-from dataLoader import ImageLoader,POSSIBLE_SPLITS
+from dataLoader import ImageLoader,load_model,FeatureExtractor, PATCH_H,PATCH_W, FEAT_DIM
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
 
-def load_model():
-    dinov2_vits14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-    return dinov2_vits14
 
-def apply_dino_features(dataset,model):
-    all_features = []
-    for samples in dataset:
-        image_batch = samples["rgbs"]
-        #Apply model
-        features_batch = model(image_batch)
-        all_features.append(features_batch)
-    return torch.stack(all_features,dim=0).detach().cpu()
-
-def save_features(array, prefix):
-    N = array.shasave_featurespe[0]
-    assert prefix in POSSIBLE_SPLITS
-    for i in range(N):
-        feature = array[i]
-        feature_name = f"{prefix}_feature_{i}.pt"
-        torch.save(array,f=feature_name)
-
-def PCA_down_sampling(array,k=3):
-    #Scale Data
-    # Calculate the mean and standard deviation for standardization
-    mean = torch.mean(array, dim=0)
-    std_dev = torch.std(array, dim=0)
-
-    # Perform standardization by subtracting the mean and dividing by standard deviation
-    scaled_data = (array - mean) / std_dev
-    #apply PCA
-    _, _, V = torch.svd(scaled_data)
-    principal_components = V[:, :k]
-    return principal_components
 
 def images_to_video(images,video_name):
     height, width, _ = images[0].shape
@@ -51,38 +18,68 @@ def images_to_video(images,video_name):
     cv2.destroyAllWindows()
     video.release()
 
-def visualize(array):
+def visualize(args,array):
     #Down Sample data
-    feature_images = PCA_down_sampling(array).numpy()
-    #turn to video
-    images_to_video(feature_images,video_name="features_visualization.avi")
+    features = array.reshape(4 * PATCH_H * PATCH_W, FEAT_DIM)
+    
+    #Apply PCA to eliminate the background
+    pca = PCA(n_components=3)
+    pca.fit(features)
+    pca_features = pca.transform(features)
+    # segment using the first component
+    pca_features_bg = pca_features[:, 0] < 10
+    pca_features_fg = ~pca_features_bg
 
-def main(args):
+    # Apply PCA to everything but the background
+    pca.fit(features[pca_features_fg]) 
+    pca_features_rem = pca.transform(features[pca_features_fg])
+    for i in range(3):
+        # pca_features_rem[:, i] = (pca_features_rem[:, i] - pca_features_rem[:, i].min()) / (pca_features_rem[:, i].max() - pca_features_rem[:, i].min())
+        # transform using mean and std, I personally found this transformation gives a better visualization
+        pca_features_rem[:, i] = (pca_features_rem[:, i] - pca_features_rem[:, i].mean()) / (pca_features_rem[:, i].std() ** 2) + 0.5
+
+    pca_features_rgb = pca_features.copy()
+    pca_features_rgb[pca_features_bg] = 0
+    pca_features_rgb[pca_features_fg] = pca_features_rem
+
+    pca_features_rgb = pca_features_rgb.reshape(4, PATCH_H, PATCH_W, 3)
+    for i in range(4):
+        plt.subplot(2, 2, i+1)
+        plt.imshow(pca_features_rgb[i][..., ::-1])
+    plt.savefig('features.png')
+    plt.show()
+    plt.close()
+    #turn to video
+    #images_to_video(feature_images,video_name="features_visualization.avi")
+
+def main(args,device):
     """
     Script to transform NeRF dataset into sparse view dataset of DinoV2 features.
     """
-
-    #I. Create Directory to save dataset
-    path = os.path.join(args.project_directory, args.feature_dataset) 
-    os.mkdir(path) 
-    print("Directory '% s' created" % path) 
-    #II. Load images and model
+    #I. Load images and model
     data_path = os.path.join(args.project_directory, args.input_dataset)
     train_dataset = ImageLoader(datadir=data_path,split="train")
     test_dataset = ImageLoader(datadir=data_path,split="test")
     val_dataset = ImageLoader(datadir=data_path,split="val")
+    print("Loading Model...")
     dinov2_model = load_model()
-    #III. Transform Images into features
-    train_features = apply_dino_features(train_dataset,dinov2_model)
-    test_features = apply_dino_features(test_dataset,dinov2_model)
-    val_features = apply_dino_features(val_dataset,dinov2_model)
-    #IV. Save features
-    save_features(train_features,prefix="train")
-    save_features(test_features,prefix="test")
-    save_features(val_features,prefix="val")
+    dinov2_model.to(device)
+    #II. Transform and Save Images into features
+    print("Getting DiNO features")
+    path = os.path.join(args.path_to_hdd, args.feature_dataset) 
+    os.makedirs(path,exist_ok=True)
+    feature_extractor = FeatureExtractor(dinov2_model,args,device)
+    train_features = feature_extractor.get_dino_features(train_dataset,os.path.join(path,"train"))
+    val_features = feature_extractor.get_dino_features(val_dataset,os.path.join(path,"val"))
+    test_features = feature_extractor.get_dino_features(test_dataset,os.path.join(path,"test"))
     #V. Visualize test data
-    visualize(test_features)
+    visualize(args,test_features[:4])
     
 if __name__ == "__main__":
     args = config_parser()
-    main(args)
+    assert args is not None
+    print(args)
+    device = torch.device("cuda:{}".format(args.local_rank) 
+                    if torch.cuda.is_available() 
+                    else "cpu")
+    main(args,device)
