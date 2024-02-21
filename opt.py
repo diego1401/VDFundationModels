@@ -19,9 +19,13 @@ def config_parser(cmd=None):
     
     # Output Dataset Information
     parser.add_argument("--feature_dataset", type=str,
-                        help='experiment name') 
+                        help='path to store features') 
+    parser.add_argument("--expname", type=str,
+                        help='Name of Experiment') 
     parser.add_argument("--path_to_hdd", type=str,
                         help='path to bigger storage') 
+    parser.add_argument("--path_to_figures", type=str,
+                        help='path to store figures') 
     
     # Machine Learning Parameters
     parser.add_argument("--batch_size", type=int,

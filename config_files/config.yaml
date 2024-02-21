@@ -1,6 +1,8 @@
 
 input_dataset = data/nerf_synthetic/lego
 path_to_hdd = ../../../../media/diegogomez/HD1/
-feature_dataset = features/small_dino_lego_features
+expname = small_dino_lego_features
+feature_dataset = features/
+path_to_figures = figures/
 local_rank = 1
 batch_size = 4

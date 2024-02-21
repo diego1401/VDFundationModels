@@ -2,3 +2,7 @@ data/
 *.pt
 *.pyc
 *.png
+figures
+*.mp4
+*.out
+*.err

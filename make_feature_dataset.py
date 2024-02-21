@@ -7,8 +7,6 @@ from dataLoader import ImageLoader,load_model,FeatureExtractor, PATCH_H,PATCH_W,
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 
-
-
 def images_to_video(images,video_name):
     height, width, _ = images[0].shape
     video = cv2.VideoWriter(video_name, 0, 1, (width,height))
@@ -66,12 +64,13 @@ def main(args,device):
     dinov2_model.to(device)
     #II. Transform and Save Images into features
     print("Getting DiNO features")
-    path = os.path.join(args.path_to_hdd, args.feature_dataset) 
+    path_to_features = os.path.join(args.feature_dataset,args.expaname)
+    path = os.path.join(args.path_to_hdd, path_to_features)
     os.makedirs(path,exist_ok=True)
-    feature_extractor = FeatureExtractor(dinov2_model,args,device)
-    train_features = feature_extractor.get_dino_features(train_dataset,os.path.join(path,"train"))
-    val_features = feature_extractor.get_dino_features(val_dataset,os.path.join(path,"val"))
-    test_features = feature_extractor.get_dino_features(test_dataset,os.path.join(path,"test"))
+    feature_extractor = FeatureExtractor(dinov2_model,args.batch_size,device)
+    train_features = feature_extractor.get_dino_features(train_dataset,os.path.join(path,"train"),save=True)
+    val_features = feature_extractor.get_dino_features(val_dataset,os.path.join(path,"val"),save=True)
+    test_features = feature_extractor.get_dino_features(test_dataset,os.path.join(path,"test"),save=True)
     #V. Visualize test data
     visualize(args,test_features[:4])
     

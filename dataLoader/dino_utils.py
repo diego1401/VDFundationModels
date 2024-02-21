@@ -16,9 +16,9 @@ def load_model():
     return dinov2_vits14
 
 class FeatureExtractor:
-    def __init__(self,model,args,device):
+    def __init__(self,model,batch_size,device):
         self.device = device
-        self.batch_size = args.batch_size
+        self.batch_size = batch_size
         self.indices_changed = []
         self.model = model
 
@@ -28,7 +28,7 @@ class FeatureExtractor:
             features_batch = features_dict['x_norm_patchtokens']
         return features_batch
 
-    def get_dino_features(self,dataset,path):
+    def get_dino_features(self,dataset,path,save=False):
         os.makedirs(path,exist_ok=True)
         all_features = []
         indices_changed = []
@@ -36,10 +36,11 @@ class FeatureExtractor:
         #If the file already exists skip it
         existing_index = 0
         get_feature_path = lambda idx: os.path.join(path,f"feature_{idx}.pt")
-
         while os.path.isfile(get_feature_path(existing_index)):
-            features_batch = torch.load(get_feature_path(existing_index)).unsqueeze(0)
-            all_features.append(features_batch)
+            if existing_index %2 == 0: 
+                print("reading file number",existing_index)
+                features_batch = torch.load(get_feature_path(existing_index)).unsqueeze(0)
+                all_features.append(features_batch)
             existing_index += 1
         if existing_index: print("Cached",existing_index,"files from",path)
         #Start from unknown
@@ -57,7 +58,7 @@ class FeatureExtractor:
 
         if len(indices_changed): print("Computed",len(indices_changed),"features")
         all_features = torch.concatenate(all_features,dim=0)
-        self.save_dino_features(all_features,indices_changed,get_feature_path)
+        if save: self.save_dino_features(all_features,indices_changed,get_feature_path)
         return all_features
 
     def save_dino_features(self,features,indices_changed,name_map):
