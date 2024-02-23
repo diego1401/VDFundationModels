@@ -11,11 +11,8 @@ import matplotlib.pyplot as plt
 
 '''
 TODO: 
-- Check if computing is faster than retrieving from HDD
-- Check if we can compute for higher resolutions
-- If computing is worth it change the code to work with batches instead.
-- See how much we can fill up the GPU
-
+- Do not load all images at once, instead load them just before processing them
+- Redo videos with higher resolution
 '''
 
 
