@@ -2,11 +2,11 @@ import numpy as np
 from PIL import Image
 import json
 import torch,cv2, os
+from tqdm import tqdm
 from torch.utils.data import Dataset
 from torchvision import transforms as T
-from .dino_utils import GET_FEATURES_TRANSFORM
+from dataLoader import POSSIBLE_SPLITS, GET_FEATURES_TRANSFORM
 
-POSSIBLE_SPLITS = ["train","test","val"]
 
 class ImageLoader(Dataset):
     def __init__(self,datadir,split="train"):
@@ -34,7 +34,7 @@ class ImageLoader(Dataset):
     def read_data(self):
         number_of_files = self.get_number_of_files()
         self.all_rgbs = []
-        for i in range(number_of_files):
+        for i in tqdm(range(number_of_files)):
             image_path = os.path.join(self.split_dir, self.name(i))
             
             img = Image.open(image_path)

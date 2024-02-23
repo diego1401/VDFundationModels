@@ -30,6 +30,9 @@ def config_parser(cmd=None):
     # Machine Learning Parameters
     parser.add_argument("--batch_size", type=int,
                         help='Size of batches used for inference') 
+    parser.add_argument("--model_size", type=str,
+                        help='Size of the model used',
+                        default='small') 
 
     if cmd is not None:
         return parser.parse_args(cmd)

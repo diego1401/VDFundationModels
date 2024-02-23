@@ -1,19 +1,17 @@
-from distutils.dir_util import copy_tree
-import torch,math,itertools
-import torch.nn.functional as F
+import torch
 from torchvision import transforms as T
 from tqdm import tqdm
 import os
+from .image_loader import ImageLoader
 
-PATCH_H = 40
-PATCH_W = 40
-FEAT_DIM = 384 # vits14
 
-def load_model():
-    dinov2_vits14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-    #dinov2_vits14.register_forward_pre_hook(lambda _, x: CenterPadding(dinov2_vits14.patch_size)(x[0]))
+def load_model(model_name:str):
+    dinov2_vits14 = torch.hub.load('facebookresearch/dinov2', model_name)
     dinov2_vits14.eval()
     return dinov2_vits14
+
+def get_feature_file_namer(path):
+    return lambda idx: os.path.join(path,f"feature_{idx}.pt")
 
 class FeatureExtractor:
     def __init__(self,model,batch_size,device):
@@ -28,6 +26,23 @@ class FeatureExtractor:
             features_batch = features_dict['x_norm_patchtokens']
         return features_batch
 
+    def get_dino_features_from_id(self,dataset:ImageLoader,path:str,idx:list):
+        '''
+        Output dim: [batch_size,PATCH_H,PATCH_W,FEAT_DIM]
+        '''
+        all_features = []
+        get_feature_path = get_feature_file_namer(path)
+        for i in idx:
+            #If the file already exists load it
+            if os.path.isfile(get_feature_path(i)):
+                features_batch = torch.load(get_feature_path(i)).unsqueeze(0)
+            else:
+                #Compute it
+                image_batch = dataset[i]['rgbs'].unsqueeze(0)
+                features_batch = self.compute_dino_features(image_batch).detach().cpu()
+            all_features.append(features_batch)
+        return torch.concatenate(all_features,dim=0)
+
     def get_dino_features(self,dataset,path,save=False):
         os.makedirs(path,exist_ok=True)
         all_features = []
@@ -35,12 +50,10 @@ class FeatureExtractor:
         length_dataset = len(dataset)
         #If the file already exists skip it
         existing_index = 0
-        get_feature_path = lambda idx: os.path.join(path,f"feature_{idx}.pt")
+        get_feature_path = get_feature_file_namer(path)
         while os.path.isfile(get_feature_path(existing_index)):
-            if existing_index %2 == 0: 
-                print("reading file number",existing_index)
-                features_batch = torch.load(get_feature_path(existing_index)).unsqueeze(0)
-                all_features.append(features_batch)
+            features_batch = torch.load(get_feature_path(existing_index)).unsqueeze(0)
+            all_features.append(features_batch)
             existing_index += 1
         if existing_index: print("Cached",existing_index,"files from",path)
         #Start from unknown
@@ -69,23 +82,4 @@ class FeatureExtractor:
         for current_index in indices_changed:
             feature = features[current_index]
             torch.save(feature,f=name_map(current_index))
-
-
-
-DINO_DEPTH_TRANSFORM = T.Compose([
-        T.ToTensor(),
-        lambda x: 255.0 * x[:3], # Discard alpha component and scale by 255
-        T.Normalize(
-            mean=(123.675, 116.28, 103.53),
-            std=(58.395, 57.12, 57.375),
-        ),
-    ])
-
-GET_FEATURES_TRANSFORM = T.Compose([
-    T.GaussianBlur(9, sigma=(0.1, 2.0)),
-    T.Resize((PATCH_H * 14, PATCH_W * 14)),
-    T.CenterCrop((PATCH_H * 14, PATCH_W * 14)),
-    T.ToTensor(),
-    lambda x: x[:3], # Discard alpha component
-    T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-])
+        print("Saved",len(indices_changed),"features")

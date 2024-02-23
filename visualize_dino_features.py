@@ -3,27 +3,25 @@ from dataLoader.dino_utils import FeatureExtractor
 import torch,os, cv2
 from tqdm import tqdm
 from opt import config_parser
-from dataLoader import ImageLoader,load_model,FeatureExtractor, PATCH_H,PATCH_W, FEAT_DIM
+from dataLoader import ImageLoader,load_model,FeatureExtractor, PATCH_H,PATCH_W,SIZE_TO_MODEL
 from sklearn.decomposition import PCA
 import numpy as np
 import matplotlib.pyplot as plt
 
-# TODO:
-# - Apply only on test data
-# - Compute PCA on 3 random images (test images 0,66,134)
-# - Make video of the PCA projection
-# - Try to do on several scenes (without saving features)
+
+'''
+TODO: 
+- Check if computing is faster than retrieving from HDD
+- Check if we can compute for higher resolutions
+- If computing is worth it change the code to work with batches instead.
+- See how much we can fill up the GPU
+
+'''
 
 
 def images_to_video(images,video_name):
-    # height, width, _ = images[0].shape
-    # video = cv2.VideoWriter(video_name, 0, 1, (width,height))
-    # for image in images:
-    #     video.write(image)
-
-    # cv2.destroyAllWindows()
-    # video.release()
-    output_video_path = 'output_video.mp4'
+    os.makedirs('videos',exist_ok=True)
+    output_video_path = f'videos/{video_name}.mp4'
 
     # Get the height and width of the images
     height, width, _ = images[0].shape
@@ -43,11 +41,13 @@ def images_to_video(images,video_name):
 
     print(f"Video saved at: {output_video_path}")
 
-def visualize_pca(args,array):
+def visualize_pca(args,feature_extractor:FeatureExtractor,dataset:ImageLoader,path:str):
     # I. Train PCA on key positions
+    #Stating macro to extract features
+    get_features = lambda idx: feature_extractor.get_dino_features_from_id(dataset,path,idx)
     # For the NeRF dataset we choose the following test indeces [0,66,134]
     key_indices = [0,33,66]
-    features_key_shots = array[key_indices].reshape(3*PATCH_H*PATCH_W,FEAT_DIM)
+    features_key_shots = get_features(key_indices).reshape(3*PATCH_H*PATCH_W,-1)
     #Train PCA to eliminate the background
     pca_remove_bg = PCA(n_components=3)
     pca_remove_bg.fit(features_key_shots)
@@ -91,8 +91,9 @@ def visualize_pca(args,array):
     os.makedirs(figure_path,exist_ok=True)
     pca_images = []
     upscaled_resolution = (800, 800)  # Adjust to the desired resolution
-    for shot_id in range(array.shape[0]):
-        current_feature = array[shot_id]
+    N = len(dataset)
+    for shot_id in tqdm(range(N)):
+        current_feature = get_features([shot_id]).squeeze(0)
         
         pca_current_feature = np.clip(get_pca_rgb(current_feature),0,1)
         pca_current_feature = cv2.resize(pca_current_feature, upscaled_resolution, interpolation=cv2.INTER_LINEAR)
@@ -104,27 +105,28 @@ def visualize_pca(args,array):
         pca_images.append(pca_current_feature)
 
     #turn to video
-    images_to_video(pca_images,video_name="features_visualization.avi")
+    images_to_video(pca_images,video_name=args.expname)
 
 def main(args,device):
     """
     Script to transform NeRF dataset into sparse view dataset of DinoV2 features.
     """
+
+    model_name, feat_dim = SIZE_TO_MODEL[args.model_size]
     #I. Load test images and model
     data_path = os.path.join(args.project_directory, args.input_dataset)
     test_dataset = ImageLoader(datadir=data_path,split="test")
     print("Loading Model...")
-    dinov2_model = load_model()
+    dinov2_model = load_model(model_name)
     dinov2_model.to(device)
-    #II. Transform and Save Images into features
-    print("Getting DiNO features")
+    #II. Create Feature Extractor
     path_to_features = os.path.join(args.feature_dataset,args.expname)
     path = os.path.join(args.path_to_hdd, path_to_features)
     os.makedirs(path,exist_ok=True)
     feature_extractor = FeatureExtractor(dinov2_model,args.batch_size,device)
-    test_features = feature_extractor.get_dino_features(test_dataset,os.path.join(path,"test"))
+    
     #V. Visualize test data
-    visualize_pca(args,test_features)
+    visualize_pca(args,feature_extractor,test_dataset,os.path.join(path,"test"))
     
 if __name__ == "__main__":
     args = config_parser()
@@ -133,4 +135,6 @@ if __name__ == "__main__":
     device = torch.device("cuda:{}".format(args.local_rank) 
                     if torch.cuda.is_available() 
                     else "cpu")
+    torch.cuda.set_device(args.local_rank)
+    print("Device used is",device)
     main(args,device)
