@@ -64,7 +64,8 @@ def visualize_pca(args,feature_extractor:FeatureExtractor,dataset:ImageLoader,pa
 
     def normalize_features(array):
         for i in range(3):
-            array[:, i] = (array[:, i] - pca_features_key_shots[:, i].mean()) / (pca_features_key_shots[:, i].std() ** 2) + 0.5
+            array[:, i] = (array[:, i] - pca_features_key_shots[:, i].mean()) / \
+                (pca_features_key_shots[:, i].std() ** 2) + 0.5
 
     # Create function to retrieve PCA rgb
             
@@ -93,7 +94,8 @@ def visualize_pca(args,feature_extractor:FeatureExtractor,dataset:ImageLoader,pa
         current_feature = get_features([shot_id]).squeeze(0)
         
         pca_current_feature = np.clip(get_pca_rgb(current_feature),0,1)
-        pca_current_feature = cv2.resize(pca_current_feature, upscaled_resolution, interpolation=cv2.INTER_LINEAR)
+        pca_current_feature = cv2.resize(pca_current_feature, upscaled_resolution, 
+                                         interpolation=cv2.INTER_LINEAR)
         pca_current_feature_uint8 = (pca_current_feature * 255).astype(np.uint8)
         # Create the filename for the current image
         filename = os.path.join(figure_path, f'test_pca_features_{shot_id}.png')

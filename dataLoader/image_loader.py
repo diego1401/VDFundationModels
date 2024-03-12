@@ -5,62 +5,99 @@ import torch,cv2, os
 from tqdm import tqdm
 from torch.utils.data import Dataset
 from torchvision import transforms as T
-from dataLoader import POSSIBLE_SPLITS, GET_FEATURES_TRANSFORM
+
+from .ray_utils import get_ray_directions, get_rays
 
 
 class ImageLoader(Dataset):
-    def __init__(self,datadir,split="train"):
+    def __init__(self, datadir, transform,split='train', img_wh=(800,800), N_vis=-1):
+
+        self.N_vis = N_vis
         self.root_dir = datadir
-        self.split_dir = os.path.join(datadir,split)
-        self.name = lambda idx: f"r_{idx}.png"
         self.split = split
-        assert self.split in POSSIBLE_SPLITS
-        self.H = None
-        self.W = None
-        self.define_transforms()
-        self.read_data()
+        
+        self.img_wh = img_wh
+        self.define_transforms(transform)
 
-    def define_transforms(self):
-        self.transform = GET_FEATURES_TRANSFORM
+        self.scene_bbox = torch.tensor([[-1.5, -1.5, -1.5], [1.5, 1.5, 1.5]])
+        self.blender2opencv = np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+        self.read_meta()
 
-    def get_number_of_files(self):
-        #NeRF dataset   
+        self.white_bg = True
+        self.near_far = [2.0,6.0]
+        
+        self.center = torch.mean(self.scene_bbox, axis=0).float().view(1, 1, 3)
+        self.radius = (self.scene_bbox[1] - self.center).float().view(1, 1, 3)
+
+    def read_meta(self):
+
         with open(os.path.join(self.root_dir, f"transforms_{self.split}.json"), 'r') as f:
-            meta = json.load(f)
-        number_of_files = len(meta['frames'])# number of images in split
+            self.meta = json.load(f)
 
-        return number_of_files
+        w, h = self.img_wh
+        self.focal = 0.5 * 800 / np.tan(0.5 * self.meta['camera_angle_x'])  # original focal length
+        self.focal *= self.img_wh[0] / 800  # modify focal length to match size self.img_wh
 
-    def read_data(self):
-        number_of_files = self.get_number_of_files()
+
+        # ray directions for all pixels, same for all images (same H, W, focal)
+        self.directions = get_ray_directions(h, w, [self.focal,self.focal])  # (h, w, 3)
+        self.directions = self.directions / torch.norm(self.directions, dim=-1, keepdim=True)
+        self.intrinsics = torch.tensor([[self.focal,0,w/2],[0,self.focal,h/2],[0,0,1]]).float()
+
+        self.image_paths = []
+        self.poses = []
+        self.all_rays = []
         self.all_rgbs = []
-        for i in tqdm(range(number_of_files)):
-            image_path = os.path.join(self.split_dir, self.name(i))
-            
+        self.all_masks = []
+        self.all_depth = []
+
+        img_eval_interval = 1 if self.N_vis < 0 else len(self.meta['frames']) // self.N_vis
+        idxs = list(range(0, len(self.meta['frames']), img_eval_interval))
+        for i in tqdm(idxs, desc=f'Loading data {self.split} ({len(idxs)})'):#img_list:#
+
+            frame = self.meta['frames'][i]
+            pose = np.array(frame['transform_matrix']) @ self.blender2opencv
+            c2w = torch.FloatTensor(pose)
+            self.poses += [c2w]
+
+            image_path = os.path.join(self.root_dir, f"{frame['file_path']}.png")
+            self.image_paths += [image_path]
             img = Image.open(image_path)
             img = self.transform(img)  # (4, h, w)
-            if not (self.H or self.W):
-                _ , self.H,self.W = img.shape
-            
             if img.shape[0] == 4:
-                img = img.view(4, -1)  # (h*w, 4) RGBA
+                img = img.view(4, -1).permute(1, 0)  # (h*w, 4) RGBA
                 img = img[:, :3] * img[:, -1:] + (1 - img[:, -1:])  # blend A to RGB
-            elif img.shape[0] == 3:
-                img = img.view(3,-1)
             self.all_rgbs += [img]
-        self.img_wh = self.all_rgbs[-1].shape
-        self.all_rgbs = torch.stack(self.all_rgbs, 0).reshape(-1,3,self.H,self.W)
 
-    def get_batch(self,idx,batch_size):
-        start_batch = idx*batch_size
-        end_batch = min((idx+1)*batch_size,self.__len__())
-        indices = list(range(start_batch,end_batch))
-        return indices,self.all_rgbs[start_batch:end_batch]
 
+            rays_o, rays_d = get_rays(self.directions, c2w)  # both (h*w, 3)
+            self.all_rays += [torch.cat([rays_o, rays_d], 1)]  # (h*w, 6)
+
+
+        self.poses = torch.stack(self.poses)
+        self.all_rays = torch.stack(self.all_rays, 0)  # (len(self.meta['frames]),h*w, 3)
+        self.all_rgbs = torch.stack(self.all_rgbs, 0)  # (len(self.meta['frames]),h,w,3)
+
+
+    def define_transforms(self,transform):
+        self.transform = transform
+        
     def __len__(self):
         return len(self.all_rgbs)
 
     def __getitem__(self, idx):
-        img = self.all_rgbs[idx]
-        sample = {'rgbs': img}
+
+        if self.split == 'train':  # use data in the buffers
+            sample = {'rays': self.all_rays[idx],
+                      'rgbs': self.all_rgbs[idx]}
+
+        else:  # create data for each image separately
+
+            img = self.all_rgbs[idx]
+            rays = self.all_rays[idx]
+
+            sample = {'rays': rays,
+                      'rgbs': img,
+            }
+        sample['pose'] = self.poses[idx]
         return sample

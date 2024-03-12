@@ -28,6 +28,11 @@ def config_parser(cmd=None):
                         help='path to store figures') 
     
     # Machine Learning Parameters
+    parser.add_argument("--model_name", type=str,
+                        choices=["DinoFeatureExtractor","DiftFeatureExtractor"],
+                        help='Model to use to extract features') 
+    parser.add_argument("--prompt", type=str,
+                        help='Prompt to extract features from diffusion models') 
     parser.add_argument("--batch_size", type=int,
                         help='Size of batches used for inference') 
     parser.add_argument("--model_size", type=str,

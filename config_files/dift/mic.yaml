@@ -1,6 +1,6 @@
 
 input_dataset = data/nerf_synthetic/mic
-#path_to_hdd = ../../../../media/diegogomez/HD1/
+model_name = DiftFeatureExtractor
 path_to_hdd = ''
 model_size = small
 expname = small_dino_mic_features

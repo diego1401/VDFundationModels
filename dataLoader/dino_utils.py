@@ -1,8 +1,16 @@
 import torch
-from torchvision import transforms as T
-from tqdm import tqdm
 import os
-from .image_loader import ImageLoader
+from torchvision import transforms as T
+from . import FeatureExtractor
+
+PATCH_H = 57
+PATCH_W = 57
+
+SIZE = 'small'
+SIZE_TO_MODEL = {
+    "small": ('dinov2_vits14',384),
+    "big": ('dinov2_vitg14',1536)
+}
 
 
 def load_model(model_name:str):
@@ -13,73 +21,26 @@ def load_model(model_name:str):
 def get_feature_file_namer(path):
     return lambda idx: os.path.join(path,f"feature_{idx}.pt")
 
-class FeatureExtractor:
-    def __init__(self,model,batch_size,device):
-        self.device = device
-        self.batch_size = batch_size
-        self.indices_changed = []
-        self.model = model
 
-    def compute_dino_features(self,image):
+
+class DinoFeatureExtractor(FeatureExtractor):
+    def __init__(self,device,args):
+        model_name, _ = SIZE_TO_MODEL[SIZE]
+        self.model = load_model(model_name)
+        self.model = self.model.to(device)
+        self.img_wh = (PATCH_H * 14, PATCH_W * 14)
+        self.transform = T.Compose([
+            T.Resize(self.img_wh),
+            T.CenterCrop(self.img_wh),
+            T.ToTensor(),
+            lambda x: x[:3], # Discard alpha component
+            T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        ])
+        super().__init__(device)
+
+    def compute_features(self,image):
+        image = image.reshape(1,3,PATCH_H*14,PATCH_W*14)
         with torch.inference_mode():
             features_dict = self.model.forward_features(image.to(self.device))
             features_batch = features_dict['x_norm_patchtokens']
-        return features_batch
-
-    def get_dino_features_from_id(self,dataset:ImageLoader,path:str,idx:list):
-        '''
-        Output dim: [batch_size,PATCH_H,PATCH_W,FEAT_DIM]
-        '''
-        all_features = []
-        get_feature_path = get_feature_file_namer(path)
-        for i in idx:
-            #If the file already exists load it
-            if os.path.isfile(get_feature_path(i)):
-                features_batch = torch.load(get_feature_path(i)).unsqueeze(0)
-            else:
-                #Compute it
-                image_batch = dataset[i]['rgbs'].unsqueeze(0)
-                features_batch = self.compute_dino_features(image_batch).detach().cpu()
-            all_features.append(features_batch)
-        return torch.concatenate(all_features,dim=0)
-
-    def get_dino_features(self,dataset,path,save=False):
-        os.makedirs(path,exist_ok=True)
-        all_features = []
-        indices_changed = []
-        length_dataset = len(dataset)
-        #If the file already exists skip it
-        existing_index = 0
-        get_feature_path = get_feature_file_namer(path)
-        while os.path.isfile(get_feature_path(existing_index)):
-            features_batch = torch.load(get_feature_path(existing_index)).unsqueeze(0)
-            all_features.append(features_batch)
-            existing_index += 1
-        if existing_index: print("Cached",existing_index,"files from",path)
-        #Start from unknown
-        batch_start_idx = existing_index//self.batch_size
-        batch_end_idx = length_dataset//self.batch_size
-        for idx_sample in tqdm(range(batch_start_idx,batch_end_idx)):
-            #TODO: Could implement to fix eventual corruptions
-            #Otherwise compute the features and save them
-            indices,image_batch = dataset.get_batch(idx_sample,self.batch_size)
-            if not len(indices): break
-            features_batch = self.compute_dino_features(image_batch)
-            #Keep tracked of the ones we compute
-            all_features.append(features_batch.detach().cpu())
-            indices_changed += indices
-
-        if len(indices_changed): print("Computed",len(indices_changed),"features")
-        all_features = torch.concatenate(all_features,dim=0)
-        if save: self.save_dino_features(all_features,indices_changed,get_feature_path)
-        return all_features
-
-    def save_dino_features(self,features,indices_changed,name_map):
-        print("features shape",features.shape)
-        if len(indices_changed)==0:
-            print("All feature already existed")
-            return
-        for current_index in indices_changed:
-            feature = features[current_index]
-            torch.save(feature,f=name_map(current_index))
-        print("Saved",len(indices_changed),"features")
+        return features_batch.reshape(PATCH_H*PATCH_W,-1)

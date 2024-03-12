@@ -1,0 +1,10 @@
+
+input_dataset = data/nerf_synthetic/materials
+model_name = DinoFeatureExtractor
+path_to_hdd = ''
+model_size = small
+expname = small_dino_materials_features
+feature_dataset = features/
+path_to_figures = figures/
+local_rank = 0
+batch_size = 4
