@@ -6,7 +6,7 @@ from tqdm import tqdm
 from opt import config_parser
 from dataLoader import ImageLoader, FeatureExtractor
 from dataLoader import DinoFeatureExtractor, PATCH_H,PATCH_W
-from dataLoader import DiftFeatureExtractor
+#from dataLoader import DiftFeatureExtractor
 
 
 
@@ -15,6 +15,8 @@ def plot(args,feat_differences,camera_differences):
     camera_differences = np.array(camera_differences)
     save_path = os.path.join("figures","global_cosine_similarity")
     save_path = os.path.join(save_path,args.model_name)
+    if args.model_name == "DinoFeatureExtractor":
+        save_path = os.path.join(save_path,args.model_size)
     os.makedirs(save_path, exist_ok=True)
     # Plot the results
     plt.figure(figsize=(8, 6))  # Adjust the figure size as needed
@@ -63,8 +65,8 @@ def compute_global_features(args,feature_extractor:FeatureExtractor,dataset):
     get_features = lambda im: feature_extractor.compute_features(im)
     features_ref = get_features(ref_image).cpu().detach().numpy()
     # camera
-    # get_camera = lambda index: dataset[index]["pose"][:3, 3].unsqueeze(0).numpy()
-    get_camera = lambda index: dataset[index]["pose"].numpy()
+    get_camera = lambda index: dataset[index]["pose"][:3, 3].unsqueeze(0).numpy()
+    #get_camera = lambda index: dataset[index]["pose"].numpy()
     ref_camera = get_camera(reference_index) #transform matrix
     # II. Compare against the rest of the frames
     N = len(dataset)
@@ -91,7 +93,7 @@ def main(args, device):
     data_path = os.path.join(args.project_directory, args.input_dataset)
     dataset = ImageLoader(datadir=data_path,
                           transform=feature_extractor.transform,
-                          split="test",
+                          split="train",
                           img_wh=feature_extractor.img_wh)
 
     # V. Visualize test data

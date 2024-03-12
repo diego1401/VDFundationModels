@@ -6,7 +6,6 @@ from . import FeatureExtractor
 PATCH_H = 57
 PATCH_W = 57
 
-SIZE = 'small'
 SIZE_TO_MODEL = {
     "small": ('dinov2_vits14',384),
     "big": ('dinov2_vitg14',1536)
@@ -25,7 +24,8 @@ def get_feature_file_namer(path):
 
 class DinoFeatureExtractor(FeatureExtractor):
     def __init__(self,device,args):
-        model_name, _ = SIZE_TO_MODEL[SIZE]
+        super().__init__(device,args)
+        model_name, _ = SIZE_TO_MODEL[args.model_size]
         self.model = load_model(model_name)
         self.model = self.model.to(device)
         self.img_wh = (PATCH_H * 14, PATCH_W * 14)
@@ -36,7 +36,7 @@ class DinoFeatureExtractor(FeatureExtractor):
             lambda x: x[:3], # Discard alpha component
             T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         ])
-        super().__init__(device)
+        
 
     def compute_features(self,image):
         image = image.reshape(1,3,PATCH_H*14,PATCH_W*14)

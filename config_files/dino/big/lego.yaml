@@ -1,0 +1,10 @@
+
+input_dataset = data/nerf_synthetic/lego
+model_name = DinoFeatureExtractor
+path_to_hdd = ''
+model_size = big
+expname = big_dino_lego_features
+feature_dataset = features/
+path_to_figures = figures/
+local_rank = 0
+batch_size = 4
