@@ -57,6 +57,11 @@ def compare_function(u,v):
     res = np.mean(res)
     return (res + 1)/2 #normalize to [0,1]
 
+def camera_extraction_function(pose):
+    res = pose[:3,:].flatten().unsqueeze(0)
+    return res
+
+
 def compute_global_features(args,feature_extractor:FeatureExtractor,dataset):
     # I. Get reference feature and camera positions
     # feat
@@ -65,8 +70,8 @@ def compute_global_features(args,feature_extractor:FeatureExtractor,dataset):
     get_features = lambda im: feature_extractor.compute_features(im)
     features_ref = get_features(ref_image).cpu().detach().numpy()
     # camera
-    get_camera = lambda index: dataset[index]["pose"][:3, 3].unsqueeze(0).numpy()
-    #get_camera = lambda index: dataset[index]["pose"].numpy()
+    #get_camera = lambda index: dataset[index]["pose"][:3, 3].unsqueeze(0).numpy()
+    get_camera = lambda index: camera_extraction_function(dataset[index]["pose"]).numpy()
     ref_camera = get_camera(reference_index) #transform matrix
     # II. Compare against the rest of the frames
     N = len(dataset)
