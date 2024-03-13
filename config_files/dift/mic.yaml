@@ -1,9 +1,10 @@
 
 input_dataset = data/nerf_synthetic/mic
 model_name = DiftFeatureExtractor
+prompt = "mic"
 path_to_hdd = ''
 model_size = small
-expname = small_dino_mic_features
+expname = mic
 feature_dataset = features/
 path_to_figures = figures/
 local_rank = 0

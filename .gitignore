@@ -1,4 +1,8 @@
 data/
+plot_data/
+figures/
+log_files/
+*.npy
 *.pt
 *.pyc
 *.png

@@ -1,9 +1,10 @@
 
 input_dataset = data/nerf_synthetic/ficus
 model_name = DiftFeatureExtractor
+prompt = "ficus"
 path_to_hdd = ''
 model_size = small
-expname = small_dino_ficus_features
+expname = ficus
 feature_dataset = features/
 path_to_figures = figures/
 local_rank = 0

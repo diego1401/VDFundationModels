@@ -1,9 +1,10 @@
 
 input_dataset = data/nerf_synthetic/hotdog
 model_name = DiftFeatureExtractor
+prompt = "hotdog"
 path_to_hdd = ''
 model_size = small
-expname = small_dino_hotdog_features
+expname = hotdog
 feature_dataset = features/
 path_to_figures = figures/
 local_rank = 0

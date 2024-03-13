@@ -1,9 +1,10 @@
 
 input_dataset = data/nerf_synthetic/drums
 model_name = DiftFeatureExtractor
+prompt = "drums"
 path_to_hdd = ''
 model_size = small
-expname = small_dino_drums_features
+expname = drums
 feature_dataset = features/
 path_to_figures = figures/
 local_rank = 0

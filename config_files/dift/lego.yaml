@@ -1,9 +1,10 @@
 
 input_dataset = data/nerf_synthetic/lego
 model_name = DiftFeatureExtractor
+prompt = "lego excavator"
 path_to_hdd = ''
 model_size = small
-expname = small_dino_lego_features
+expname = lego
 feature_dataset = features/
 path_to_figures = figures/
 local_rank = 0

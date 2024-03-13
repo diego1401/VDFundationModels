@@ -1,9 +1,10 @@
 
 input_dataset = data/nerf_synthetic/ship
 model_name = DiftFeatureExtractor
+prompt = "ship"
 path_to_hdd = ''
 model_size = small
-expname = small_dino_ship_features
+expname = ship
 feature_dataset = features/
 path_to_figures = figures/
 local_rank = 0

@@ -6,13 +6,22 @@ from tqdm import tqdm
 from opt import config_parser
 from dataLoader import ImageLoader, FeatureExtractor
 from dataLoader import DinoFeatureExtractor, PATCH_H,PATCH_W
-#from dataLoader import DiftFeatureExtractor
+from dataLoader import DiftFeatureExtractor
 
 
+
+def save(args, feat_differences, camera_differences):
+    save_path = os.path.join("plot_data","global_cosine_similarity")
+    save_path = os.path.join(save_path,args.model_name)
+    if args.model_name == "DinoFeatureExtractor":
+        save_path = os.path.join(save_path,args.model_size)
+    os.makedirs(save_path, exist_ok=True)
+    with open(os.path.join(save_path,f"{args.expname}_camera.npy"), 'wb') as f:
+        np.save(f, camera_differences)
+    with open(os.path.join(save_path,f"{args.expname}_feat.npy"), 'wb') as f:
+        np.save(f, feat_differences)
 
 def plot(args,feat_differences,camera_differences):
-    feat_differences = np.array(feat_differences)
-    camera_differences = np.array(camera_differences)
     save_path = os.path.join("figures","global_cosine_similarity")
     save_path = os.path.join(save_path,args.model_name)
     if args.model_name == "DinoFeatureExtractor":
@@ -57,10 +66,34 @@ def compare_function(u,v):
     res = np.mean(res)
     return (res + 1)/2 #normalize to [0,1]
 
-def camera_extraction_function(pose):
-    res = pose[:3,:].flatten().unsqueeze(0)
-    return res
+def rotation_matrix_to_euler_angles(rotation_matrix):
+    sy = np.sqrt(rotation_matrix[0, 0] ** 2 + rotation_matrix[1, 0] ** 2)
 
+    singular = sy < 1e-6
+
+    if not singular:
+        x = np.arctan2(rotation_matrix[2, 1], rotation_matrix[2, 2])
+        y = np.arctan2(-rotation_matrix[2, 0], sy)
+        z = np.arctan2(rotation_matrix[1, 0], rotation_matrix[0, 0])
+    else:
+        x = np.arctan2(-rotation_matrix[1, 2], rotation_matrix[1, 1])
+        y = np.arctan2(-rotation_matrix[2, 0], sy)
+        z = 0
+
+    return torch.tensor([x,y,z])
+
+def camera_extraction_function(pose):
+    R = pose[:3,:3]
+    T = pose[:3,3].unsqueeze(0)
+    # Using euler angles
+    #euler_angles = rotation_matrix_to_euler_angles(R).unsqueeze(0)
+    #return torch.cat([euler_angles,T]).squeeze(0)
+    # Flattening the whole matrix
+    #res = pose[:3,:].flatten().unsqueeze(0)
+    # Retrieving a directional vector
+    directional_vector =  (R @ torch.tensor([0.,0.,1.])).unsqueeze(0)
+    res = torch.cat([directional_vector,T]).squeeze(0)
+    return res
 
 def compute_global_features(args,feature_extractor:FeatureExtractor,dataset):
     # I. Get reference feature and camera positions
@@ -88,8 +121,15 @@ def compute_global_features(args,feature_extractor:FeatureExtractor,dataset):
         feat_differences.append(compare_function(features_ref,current_feature))
         camera_differences.append(compare_function(ref_camera,current_camera))
     
+    # Starting Plot and Save
+    feat_differences = np.array(feat_differences)
+    camera_differences = np.array(camera_differences)
+    # Save
+    save(args, feat_differences, camera_differences)
+    # Plot
     plot(args,feat_differences,camera_differences)
-    
+
+   
 # Main function to run the program
 def main(args, device):
     # I. Load test images and model

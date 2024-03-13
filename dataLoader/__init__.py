@@ -9,7 +9,7 @@ class FeatureExtractor:
     def compute_features(self,image):
         raise ValueError("Cannot Use Abstract Class")
 
-# from .dift_utils import DiftFeatureExtractor
+from .dift_utils import DiftFeatureExtractor
 from .dino_utils import DinoFeatureExtractor, SIZE_TO_MODEL, PATCH_H, PATCH_W
 from .image_loader import ImageLoader
 from .custom_depth_pipeline import PositionLoader
