@@ -19,8 +19,11 @@ class DiftFeatureExtractor(FeatureExtractor):
         self.transform = lambda img: custom_transform(img,self.img_wh)
         self.forward_function = lambda img: self.model.forward(img,prompt=args.prompt)
         
-    def compute_features(self,image):
+    def compute_features(self,image,prompt=None):
         image = image.reshape(1,3,self.img_wh[0],self.img_wh[1])
         with torch.inference_mode():
-            ft = self.forward_function(image)
+            if prompt is not None:
+                ft = self.model.forward(image,prompt=prompt)
+            else:
+                ft = self.forward_function(image)
         return ft.reshape(self.img_wh[0],self.img_wh[1],-1)

@@ -7,9 +7,20 @@ from opt import config_parser
 from dataLoader import ImageLoader, FeatureExtractor
 from dataLoader import DinoFeatureExtractor, PATCH_H,PATCH_W
 from dataLoader import DiftFeatureExtractor
+import cv2
 
+TASK_NAME = "local_cosine_similarity" 
 
-TASK_NAME = "global_cosine_similarity"
+def compute_sift(image):
+    # Convert the training image to RGB
+    image = image.squeeze(0).permute(1,2,0).numpy()
+    #image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY).astype(np.uint8)
+    #print(gray)
+    # Sift geatures
+    sift = cv2.xfeatures2d.SIFT_create()
+    keypoints, descriptors = sift.detectAndCompute(gray, None)
+    return keypoints, descriptors
 
 def save(args, feat_differences, camera_differences):
     save_path = os.path.join("plot_data",TASK_NAME)
@@ -104,6 +115,7 @@ def compute_global_features(args,feature_extractor:FeatureExtractor,dataset):
     ref_image = dataset[reference_index]["rgbs"].unsqueeze(0)
     get_features = lambda im: feature_extractor.compute_features(im)
     features_ref = get_features(ref_image).cpu().detach().numpy()
+    #keypoints_ref,descriptors_ref = compute_sift(ref_image)
     # camera
     get_camera = lambda index: camera_extraction_function(dataset[index]["pose"]).numpy()
     ref_camera = get_camera(reference_index) #transform matrix
@@ -112,15 +124,38 @@ def compute_global_features(args,feature_extractor:FeatureExtractor,dataset):
     feat_differences = []
     camera_differences = []
     
-    for shot_id in tqdm(range(N)):
+    for shot_id in tqdm(range(1,N)):
         #feat
         current_image = dataset[shot_id]["rgbs"].unsqueeze(0)
         current_feature = get_features(current_image).squeeze(0).cpu().detach().numpy()
         #camera
         current_camera = get_camera(shot_id)
+        
+        # #keypoints
+        # current_keypoints,current_descriptors = compute_sift(current_image)
+        # # match keypoints
+        # # Create a Brute Force Matcher object.
+        # bf = cv2.BFMatcher(cv2.NORM_L1, crossCheck = True)
+        # matches = bf.match(current_descriptors, descriptors_ref)
+        # matches = sorted(matches, key = lambda x : x.distance)[:20]
+        # # construct list of match pixel coordinates
+        # ratio_image_feature = current_feature.shape[0]/current_image.shape[-2]
+        # ref_points = np.array([keypoints_ref[m.trainIdx].pt for m in matches])//ratio_image_feature
+        # curr_points = np.array([current_keypoints[m.queryIdx].pt for m in matches])//ratio_image_feature
+        # selected_feat_ref = np.array([features_ref[int(p[0]),int(p[1])] for p in ref_points])
+        # selected_feat_curr = np.array([current_feature[int(p[0]),int(p[1])] for p in curr_points])
+        
         # III. Compute the difference
         feat_differences.append(compare_function(features_ref,current_feature))
         camera_differences.append(compare_function(ref_camera,current_camera))
+        
+        # Change reference to current frame
+        
+        # keypoints_ref = current_keypoints
+        # descriptors_ref = current_descriptors
+        features_ref = current_feature
+        ref_camera = current_camera
+        
     
     # Starting Plot and Save
     feat_differences = np.array(feat_differences)
@@ -138,7 +173,7 @@ def main(args, device):
     data_path = os.path.join(args.project_directory, args.input_dataset)
     dataset = ImageLoader(datadir=data_path,
                           transform=feature_extractor.transform,
-                          split="train",
+                          split="test",
                           img_wh=feature_extractor.img_wh)
 
     # V. Visualize test data
